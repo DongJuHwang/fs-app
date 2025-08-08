@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ corp_name }} - 재무제표 분석</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .header-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .data-table {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        .metric-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .back-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        .filter-section {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    {% if error %}
+    <div class="container mt-5">
+        <div class="alert alert-info" role="alert">
+            <h4 class="alert-heading">
+                <i class="fas fa-info-circle me-2"></i>
+                {% if "조회된 데이터가 없습니다" in error %}
+                    데이터 없음
+                {% else %}
+                    오류 발생
+                {% endif %}
+            </h4>
+            <div style="white-space: pre-line;">{{ error }}</div>
+            <hr>
+            <div class="d-flex gap-2">
+                <a href="/" class="btn btn-primary">
+                    <i class="fas fa-home me-1"></i> 메인으로 돌아가기
+                </a>
+                {% if "조회된 데이터가 없습니다" in error %}
+                <button class="btn btn-outline-primary" onclick="tryDifferentYear()">
+                    <i class="fas fa-calendar-alt me-1"></i> 다른 연도 시도
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- 헤더 섹션 -->
+    <div class="header-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <a href="/" class="back-btn me-3">
+                        <i class="fas fa-arrow-left"></i> 뒤로가기
+                    </a>
+                    <h1 class="mb-2">{{ corp_name }}</h1>
+                    <p class="mb-0">
+                        <i class="fas fa-building me-2"></i>
+                        회사코드: {{ corp_code }} | 
+                        <i class="fas fa-calendar me-2"></i>
+                        연도: {{ year }} | 
+                        <i class="fas fa-file-alt me-2"></i>
+                        보고서: 
+                        {% if report_code == '11011' %}사업보고서
+                        {% elif report_code == '11012' %}반기보고서
+                        {% elif report_code == '11013' %}1분기보고서
+                        {% elif report_code == '11014' %}3분기보고서
+                        {% else %}{{ report_code }}
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-light" onclick="changeYear('2022')">2022</button>
+                        <button type="button" class="btn btn-outline-light" onclick="changeYear('2021')">2021</button>
+                        <button type="button" class="btn btn-outline-light" onclick="changeYear('2020')">2020</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-5">
+        <!-- 필터 섹션 -->
+        <div class="filter-section">
+            <div class="row align-items-center mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">조회 방식:</label>
+                    <select class="form-select" id="viewMode" onchange="toggleViewMode()">
+                        <option value="single" {% if view_mode == 'single' %}selected{% endif %}>단일 연도</option>
+                        <option value="period" {% if view_mode == 'period' %}selected{% endif %}>기간별 분석</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">보고서 유형:</label>
+                    <select class="form-select" id="reportType" onchange="changeReportType()">
+                        <option value="11011" {% if report_code == '11011' %}selected{% endif %}>사업보고서</option>
+                        <option value="11012" {% if report_code == '11012' %}selected{% endif %}>반기보고서</option>
+                        <option value="11013" {% if report_code == '11013' %}selected{% endif %}>1분기보고서</option>
+                        <option value="11014" {% if report_code == '11014' %}selected{% endif %}>3분기보고서</option>
+                    </select>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-primary" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> 데이터 새로고침
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 단일 연도 조회 -->
+            <div id="singleYearSection" {% if view_mode == 'period' %}style="display:none"{% endif %}>
+                <div class="row align-items-center">
+                    <div class="col-md-12">
+                        <label class="form-label">연도 선택:</label>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-light" onclick="changeYear('2020')">2020</button>
+                            <button type="button" class="btn btn-outline-light" onclick="changeYear('2021')">2021</button>
+                            <button type="button" class="btn btn-outline-light" onclick="changeYear('2022')">2022</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 기간별 조회 -->
+            <div id="periodSection" {% if view_mode != 'period' %}style="display:none"{% endif %}>
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <label class="form-label">시작 연도:</label>
+                        <select class="form-select" id="startYear">
+                            <option value="2015" {% if start_year == '2015' %}selected{% endif %}>2015</option>
+                            <option value="2016" {% if start_year == '2016' %}selected{% endif %}>2016</option>
+                            <option value="2017" {% if start_year == '2017' %}selected{% endif %}>2017</option>
+                            <option value="2018" {% if start_year == '2018' %}selected{% endif %}>2018</option>
+                            <option value="2019" {% if start_year == '2019' %}selected{% endif %}>2019</option>
+                            <option value="2020" {% if start_year == '2020' or not start_year %}selected{% endif %}>2020</option>
+                            <option value="2021" {% if start_year == '2021' %}selected{% endif %}>2021</option>
+                            <option value="2022" {% if start_year == '2022' %}selected{% endif %}>2022</option>
+                            <option value="2023" {% if start_year == '2023' %}selected{% endif %}>2023</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">종료 연도:</label>
+                        <select class="form-select" id="endYear">
+                            <option value="2015" {% if end_year == '2015' %}selected{% endif %}>2015</option>
+                            <option value="2016" {% if end_year == '2016' %}selected{% endif %}>2016</option>
+                            <option value="2017" {% if end_year == '2017' %}selected{% endif %}>2017</option>
+                            <option value="2018" {% if end_year == '2018' %}selected{% endif %}>2018</option>
+                            <option value="2019" {% if end_year == '2019' %}selected{% endif %}>2019</option>
+                            <option value="2020" {% if end_year == '2020' %}selected{% endif %}>2020</option>
+                            <option value="2021" {% if end_year == '2021' %}selected{% endif %}>2021</option>
+                            <option value="2022" {% if end_year == '2022' or not end_year %}selected{% endif %}>2022</option>
+                            <option value="2023" {% if end_year == '2023' %}selected{% endif %}>2023</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button class="btn btn-success" onclick="applyPeriod()">
+                                <i class="fas fa-chart-line"></i> 기간 분석 시작
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 주요 지표 카드 -->
+        {% if financial_data %}
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalAssets">-</div>
+                    <div class="metric-label">자산총계</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalLiabilities">-</div>
+                    <div class="metric-label">부채총계</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="revenue">-</div>
+                    <div class="metric-label">매출액</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value" id="netIncome">-</div>
+                    <div class="metric-label">당기순이익</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 차트 섹션 -->
+        {% if charts %}
+        {% if view_mode == 'period' %}
+        <!-- 기간별 분석 차트 -->
+        <div class="chart-section">
+            <h3 class="mb-4 text-center">
+                <i class="fas fa-chart-line"></i> 기간별 재무 분석 
+                <span class="badge bg-info fs-6">{{ start_year }}~{{ end_year }}년</span>
+            </h3>
+            
+            <!-- 분석 요약 -->
+            {% if analysis_summary %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-dark shadow">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0"><i class="fas fa-analytics me-2"></i>기간별 분석 요약</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h6 class="text-muted">분석 기간</h6>
+                                        <h4 class="text-primary">{{ analysis_summary.period }}</h4>
+                                        <p class="small text-muted">
+                                            분석 연도: {{ analysis_summary.years_analyzed | join(', ') }}년
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="col-md-9">
+                                    <div class="row">
+                                        {% for account, metrics in analysis_summary.key_metrics.items() %}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="border rounded p-3 h-100">
+                                                <h6 class="text-dark mb-2">
+                                                    <i class="fas fa-chart-bar me-1"></i>{{ account }}
+                                                </h6>
+                                                <div class="small">
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>시작값:</span>
+                                                        <strong>{{ metrics.start_value_formatted }}</strong>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>종료값:</span>
+                                                        <strong>{{ metrics.end_value_formatted }}</strong>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>총 성장률:</span>
+                                                        <strong class="{% if metrics.total_growth >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                            {{ "%.1f"|format(metrics.total_growth) }}%
+                                                        </strong>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between">
+                                                        <span>연평균 성장률:</span>
+                                                        <strong class="{% if metrics.cagr >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                                            {{ "%.1f"|format(metrics.cagr) }}%
+                                                        </strong>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- 종합 비교 차트들 -->
+            {% if charts.performance_comparison %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-primary shadow">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>재무 성과 종합 비교</h5>
+                        </div>
+                        <div class="card-body">
+                            {{ charts.performance_comparison | safe }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if charts.structure_analysis %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-info shadow">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>재무 구조 분석</h5>
+                        </div>
+                        <div class="card-body">
+                            {{ charts.structure_analysis | safe }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- 성장률 분석 -->
+            <div class="row mb-4">
+                {% for chart_name, chart_html in charts.items() %}
+                    {% if '_growth' in chart_name %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card border-success shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>성장률 분석</h6>
+                            </div>
+                            <div class="card-body">
+                                {{ chart_html | safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- 재무 비율 및 수익성 -->
+            <div class="row mb-4">
+                {% if charts.debt_ratio_donut %}
+                <div class="col-md-6 mb-3">
+                    <div class="card border-warning shadow-sm">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0"><i class="fas fa-percentage me-2"></i>부채비율 분석</h6>
+                        </div>
+                        <div class="card-body">
+                            {{ charts.debt_ratio_donut | safe }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if charts.profitability_radar %}
+                <div class="col-md-6 mb-3">
+                    <div class="card border-success shadow-sm">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>수익성 분석</h6>
+                        </div>
+                        <div class="card-body">
+                            {{ charts.profitability_radar | safe }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- 개별 계정 추이 -->
+            <div class="row">
+                {% for chart_name, chart_html in charts.items() %}
+                    {% if '_trend' in chart_name and '_growth' not in chart_name %}
+                    <div class="col-md-6 mb-4">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                {{ chart_html | safe }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        
+        {% else %}
+        <!-- 단일 연도 차트 -->
+        <div class="chart-section">
+            <h3 class="mb-4 text-center">
+                <i class="fas fa-chart-bar"></i> 재무제표 시각화 
+                <span class="badge bg-secondary fs-6">{{ year }}년</span>
+            </h3>
+            
+            <div class="row">
+                {% if charts.balance_sheet %}
+                <div class="col-lg-6">
+                    <div class="chart-container">
+                        <h5><i class="fas fa-balance-scale me-2"></i>재무상태표</h5>
+                        {{ charts.balance_sheet | safe }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if charts.income_statement %}
+                <div class="col-lg-6">
+                    <div class="chart-container">
+                        <h5><i class="fas fa-chart-line me-2"></i>손익계산서</h5>
+                        {{ charts.income_statement | safe }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- 재무비율 차트들 -->
+            <div class="row">
+                {% if charts.profitability_radar %}
+                <div class="col-lg-6">
+                    <div class="chart-container">
+                        <h5><i class="fas fa-chart-pie me-2"></i>수익성 분석</h5>
+                        {{ charts.profitability_radar | safe }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if charts.debt_ratio_donut %}
+                <div class="col-lg-6">
+                    <div class="chart-container">
+                        <h5><i class="fas fa-percentage me-2"></i>부채비율 분석</h5>
+                        {{ charts.debt_ratio_donut | safe }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- 데이터 테이블 -->
+        {% if financial_data %}
+        <div class="data-table">
+            <h5><i class="fas fa-table me-2"></i>상세 재무 데이터</h5>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>계정명</th>
+                            <th>재무제표구분</th>
+                            <th>당기금액</th>
+                            <th>전기금액</th>
+                            <th>변동률</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in financial_data %}
+                        <tr>
+                            <td>{{ item.account_nm }}</td>
+                            <td>
+                                {% if item.sj_div == 'BS' %}
+                                <span class="badge bg-primary">재무상태표</span>
+                                {% else %}
+                                <span class="badge bg-success">손익계산서</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.thstrm_amount_formatted or item.thstrm_amount }}</td>
+                            <td>{{ item.frmtrm_amount_formatted or item.frmtrm_amount }}</td>
+                            <td>
+                                {% if item.thstrm_amount and item.frmtrm_amount %}
+                                    {% set current = item.thstrm_amount.replace(',', '') | int %}
+                                    {% set previous = item.frmtrm_amount.replace(',', '') | int %}
+                                    {% if previous != 0 %}
+                                        {% set change = ((current - previous) / previous * 100) | round(1) %}
+                                        <span class="badge {% if change > 0 %}bg-success{% elif change < 0 %}bg-danger{% else %}bg-secondary{% endif %}">
+                                            {{ change }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="data-table">
+            <div class="alert alert-info" role="alert">
+                <h5><i class="fas fa-info-circle me-2"></i>데이터 없음</h5>
+                <p>해당 연도와 보고서 유형에 대한 재무제표 데이터가 없습니다.</p>
+                <p>다른 연도나 보고서 유형을 선택해보세요.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 주요 지표 업데이트
+        function updateMetrics() {
+            const financialData = {{ financial_data | tojson if financial_data else '[]' }};
+            
+            // 자산총계 찾기
+            const totalAssets = financialData.find(item => 
+                item.account_nm.includes('자산총계') && item.sj_div === 'BS'
+            );
+            if (totalAssets) {
+                document.getElementById('totalAssets').textContent = 
+                    formatCurrency(totalAssets.thstrm_amount);
+            }
+            
+            // 부채총계 찾기
+            const totalLiabilities = financialData.find(item => 
+                item.account_nm.includes('부채총계') && item.sj_div === 'BS'
+            );
+            if (totalLiabilities) {
+                document.getElementById('totalLiabilities').textContent = 
+                    formatCurrency(totalLiabilities.thstrm_amount);
+            }
+            
+            // 매출액 찾기
+            const revenue = financialData.find(item => 
+                item.account_nm.includes('매출액') && item.sj_div === 'IS'
+            );
+            if (revenue) {
+                document.getElementById('revenue').textContent = 
+                    formatCurrency(revenue.thstrm_amount);
+            }
+            
+            // 당기순이익 찾기
+            const netIncome = financialData.find(item => 
+                item.account_nm.includes('당기순이익') && item.sj_div === 'IS'
+            );
+            if (netIncome) {
+                document.getElementById('netIncome').textContent = 
+                    formatCurrency(netIncome.thstrm_amount);
+            }
+        }
+        
+        // 통화 포맷팅
+        function formatCurrency(amount) {
+            if (!amount) return '-';
+            const num = parseInt(amount.replace(/,/g, ''));
+            if (num >= 1e12) {
+                return (num / 1e12).toFixed(1) + '조';
+            } else if (num >= 1e8) {
+                return (num / 1e8).toFixed(1) + '억';
+            } else if (num >= 1e4) {
+                return (num / 1e4).toFixed(1) + '만';
+            }
+            return num.toLocaleString();
+        }
+        
+        // 연도 변경
+        function changeYear(year) {
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('year', year);
+            window.location.href = currentUrl.toString();
+        }
+        
+        // 보고서 유형 변경
+        function changeReportType() {
+            const reportType = document.getElementById('reportType').value;
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('report_code', reportType);
+            window.location.href = currentUrl.toString();
+        }
+        
+
+        
+        // 데이터 새로고침
+        function refreshData() {
+            window.location.reload();
+        }
+        
+        // 조회 방식 변경
+        function toggleViewMode() {
+            const viewMode = document.getElementById('viewMode').value;
+            const singleSection = document.getElementById('singleYearSection');
+            const periodSection = document.getElementById('periodSection');
+            
+            if (viewMode === 'period') {
+                singleSection.style.display = 'none';
+                periodSection.style.display = 'block';
+            } else {
+                singleSection.style.display = 'block';
+                periodSection.style.display = 'none';
+            }
+        }
+        
+        // 기간 분석 적용
+        function applyPeriod() {
+            const startYear = document.getElementById('startYear').value;
+            const endYear = document.getElementById('endYear').value;
+            
+            if (!startYear || !endYear) {
+                alert('시작 연도와 종료 연도를 모두 입력해주세요.');
+                return;
+            }
+            
+            if (parseInt(startYear) > parseInt(endYear)) {
+                alert('시작 연도는 종료 연도보다 작거나 같아야 합니다.');
+                return;
+            }
+            
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('view_mode', 'period');
+            currentUrl.searchParams.set('start_year', startYear);
+            currentUrl.searchParams.set('end_year', endYear);
+            window.location.href = currentUrl.toString();
+        }
+        
+        // 다른 연도 시도
+        function tryDifferentYear() {
+            const currentUrl = new URL(window.location);
+            const currentYear = currentUrl.searchParams.get('year') || '2022';
+            
+            // 이전 연도로 변경
+            let newYear;
+            if (currentYear === '2022') {
+                newYear = '2021';
+            } else if (currentYear === '2021') {
+                newYear = '2020';
+            } else {
+                newYear = '2022'; // 기본값
+            }
+            
+            currentUrl.searchParams.set('year', newYear);
+            window.location.href = currentUrl.toString();
+        }
+        
+        // 페이지 로드 시 지표 업데이트
+        document.addEventListener('DOMContentLoaded', function() {
+            {% if financial_data %}
+            updateMetrics();
+            {% endif %}
+        });
+    </script>
+</body>
+</html> 

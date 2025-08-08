@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: financial-dashboard
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: OPENDART_API_KEY
+        sync: false
+      - key: OPENDART_BASE_URL
+        value: https://opendart.fss.or.kr/api

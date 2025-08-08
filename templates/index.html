@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>재무제표 시각화</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <style>
+        body {
+            background-color: #003050;
+            color: #e0e0e0;
+        }
+        
+        .hero-section {
+            background: linear-gradient(135deg, #004080 0%, #002040 100%);
+            color: white;
+            padding: 60px 0;
+        }
+        
+        .search-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .company-result {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: #004060;
+            color: #e0e0e0;
+            border: 1px solid #005080;
+        }
+        
+        .company-result:hover {
+            background-color: #005080;
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        .loading {
+            display: none;
+        }
+        
+        .chart-container {
+            background: #004060;
+            border-radius: 10px;
+            padding: 0;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #005080;
+        }
+        
+        .chart-header {
+            background-color: #002040;
+            border-bottom: 1px solid #005080;
+            padding: 15px 20px;
+            border-radius: 10px 10px 0 0;
+            margin: 0;
+            color: #e0e0e0;
+        }
+        
+        .chart-body {
+            padding: 20px;
+            background-color: #004060;
+        }
+        
+        .filter-section {
+            background: #004060;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid #005080;
+        }
+        
+        .financial-section {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .financial-section.active {
+            display: block;
+        }
+        
+        .period-info {
+            background: linear-gradient(45deg, #004080, #005080);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 5px solid #0070c0;
+            color: #e0e0e0;
+        }
+        
+        .data-table {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .chart-period-info {
+            background: #004060;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0070c0;
+            color: #e0e0e0;
+        }
+        
+        .card {
+            background-color: #004060;
+            border: 1px solid #005080;
+            color: #e0e0e0;
+        }
+        
+        .card-header {
+            background-color: #002040;
+            border-bottom: 1px solid #005080;
+            color: #e0e0e0;
+        }
+        
+        .form-control, .form-select {
+            background-color: #005080;
+            border: 1px solid #0070c0;
+            color: #e0e0e0;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: #006090;
+            border-color: #0070c0;
+            color: white;
+            box-shadow: 0 0 0 0.2rem rgba(0, 112, 192, 0.25);
+        }
+        
+        .btn-primary {
+            background-color: #0070c0;
+            border-color: #0070c0;
+        }
+        
+        .btn-primary:hover {
+            background-color: #0080d0;
+            border-color: #0080d0;
+        }
+        
+        .btn-outline-primary {
+            color: #0070c0;
+            border-color: #0070c0;
+        }
+        
+        .btn-outline-primary:hover, .btn-outline-primary.active {
+            background-color: #0070c0;
+            border-color: #0070c0;
+            color: white;
+        }
+        
+        .table {
+            color: #e0e0e0;
+        }
+        
+        .table-dark {
+            background-color: #002040;
+        }
+        
+        .alert {
+            background-color: #004060;
+            border: 1px solid #005080;
+            color: #e0e0e0;
+        }
+        
+        .text-dark {
+            color: #e0e0e0 !important;
+        }
+        
+        .text-muted {
+            color: #b0b0b0 !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="hero-section">
+        <div class="container">
+            <div class="text-center mb-4">
+                <h1 class="display-5 fw-bold mb-3">재무제표 시각화</h1>
+                <p class="lead">OpenDart API를 활용한 기업 재무정보 분석 도구</p>
+            </div>
+            
+            <div class="search-container">
+                <div class="card shadow-lg">
+                    <div class="card-body p-4">
+                        <h5 class="card-title text-dark mb-3">
+                            <i class="fas fa-search me-2"></i>기업 검색
+                        </h5>
+                        <div class="input-group">
+                            <input type="text" 
+                                   id="companySearch" 
+                                   class="form-control form-control-lg" 
+                                   placeholder="회사명을 입력하세요 (예: 삼성전자, SK하이닉스)"
+                                   autocomplete="off">
+                            <button class="btn btn-primary btn-lg" type="button" onclick="searchCompany()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div class="loading mt-3 text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">검색 중...</span>
+                            </div>
+                        </div>
+                        <div id="searchResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 재무제표 분석 섹션 -->
+    <div id="financialSection" class="financial-section container-fluid">
+        <div class="container">
+            <!-- 회사 정보 헤더 -->
+            <div id="companyHeader" class="row mb-4">
+                <!-- 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 필터 섹션 -->
+            <div class="filter-section" id="filterSection">
+                <!-- 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 기간 정보 -->
+            <div id="periodInfo" class="period-info" style="display:none;">
+                <!-- 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 분석 요약 -->
+            <div id="analysisSummary">
+                <!-- 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 차트 섹션 -->
+            <div id="chartsSection">
+                <!-- 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 데이터 테이블 -->
+            <div id="dataTableSection">
+                <!-- 동적으로 생성됩니다 -->
+            </div>
+
+            <!-- 로딩 표시 -->
+            <div id="financialLoading" class="text-center" style="display:none;">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">데이터 로딩 중...</span>
+                </div>
+                <p class="mt-3 h5">재무제표 데이터를 분석하고 있습니다...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let searchTimeout;
+        let currentCorpCode = '';
+        let currentCorpName = '';
+        let currentViewMode = 'single';
+        
+        // 입력 이벤트 리스너
+        document.getElementById('companySearch').addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            if (query.length >= 2) {
+                searchTimeout = setTimeout(() => {
+                    searchCompany();
+                }, 300);
+            } else {
+                document.getElementById('searchResults').innerHTML = '';
+            }
+        });
+        
+        // 엔터 키 이벤트
+        document.getElementById('companySearch').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchCompany();
+            }
+        });
+        
+        function searchCompany() {
+            const query = document.getElementById('companySearch').value.trim();
+            const resultsDiv = document.getElementById('searchResults');
+            const loading = document.querySelector('.loading');
+            
+            if (query.length < 2) {
+                resultsDiv.innerHTML = '<div class="alert alert-warning">최소 2글자 이상 입력해주세요.</div>';
+                return;
+            }
+            
+            loading.style.display = 'block';
+            resultsDiv.innerHTML = '';
+            
+            fetch(`/search?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    loading.style.display = 'none';
+                    displaySearchResults(data);
+                })
+                .catch(error => {
+                    loading.style.display = 'none';
+                    console.error('검색 오류:', error);
+                    resultsDiv.innerHTML = '<div class="alert alert-danger">검색 중 오류가 발생했습니다.</div>';
+                });
+        }
+        
+        function displaySearchResults(results) {
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if (results.length === 0) {
+                resultsDiv.innerHTML = '<div class="alert alert-info">검색 결과가 없습니다.</div>';
+                return;
+            }
+            
+            let html = '<div class="list-group">';
+            results.forEach(company => {
+                html += `
+                    <div class="list-group-item company-result" onclick="selectCompany('${company.corp_code}', '${company.corp_name}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${company.corp_name}</h6>
+                                <small class="text-muted">
+                                    코드: ${company.corp_code}
+                                    ${company.stock_code ? ` | 종목코드: ${company.stock_code}` : ''}
+                                </small>
+                            </div>
+                            <div>
+                                <i class="fas fa-arrow-right text-primary"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        function selectCompany(corpCode, corpName) {
+            currentCorpCode = corpCode;
+            currentCorpName = corpName;
+            
+            // URL 업데이트
+            const url = new URL(window.location);
+            url.searchParams.set('corp_code', corpCode);
+            url.searchParams.set('corp_name', corpName);
+            window.history.pushState({}, '', url);
+            
+            // 검색 결과 숨기기
+            document.getElementById('searchResults').innerHTML = '';
+            
+            // 재무제표 섹션 표시 및 필터 생성
+            showFinancialSection();
+            createFilters();
+            
+            // 기본 데이터 로드 (단일 연도, 2022년)
+            loadFinancialData(corpCode, corpName, 'single', '2022', '', '', '11011');
+        }
+        
+        function showFinancialSection() {
+            document.getElementById('financialSection').classList.add('active');
+            
+            // 회사 헤더 생성
+                         document.getElementById('companyHeader').innerHTML = `
+                 <div class="col-12">
+                     <div class="card border-primary">
+                         <div class="card-body">
+                             <h1 class="mb-0 text-white fw-bold">
+                                 <i class="fas fa-building me-2"></i>${currentCorpName}
+                                 <span class="badge bg-secondary fs-6 ms-2">${currentCorpCode}</span>
+                             </h1>
+                         </div>
+                     </div>
+                 </div>
+             `;
+        }
+        
+        function createFilters() {
+            document.getElementById('filterSection').innerHTML = `
+                <div class="row align-items-center mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">조회 방식:</label>
+                        <select class="form-select" id="viewMode" onchange="toggleViewMode()">
+                            <option value="single">단일 연도</option>
+                            <option value="period">기간별 분석</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">보고서 유형:</label>
+                        <select class="form-select" id="reportType">
+                            <option value="11011">사업보고서</option>
+                            <option value="11012">반기보고서</option>
+                            <option value="11013">1분기보고서</option>
+                            <option value="11014">3분기보고서</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <button class="btn btn-primary" onclick="applyFilters()">
+                                <i class="fas fa-search"></i> 조회
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 단일 연도 조회 -->
+                <div id="singleYearSection">
+                    <div class="row align-items-center">
+                        <div class="col-md-12">
+                            <label class="form-label">연도 선택:</label>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary" onclick="selectYear('2020')">2020</button>
+                                <button type="button" class="btn btn-outline-primary" onclick="selectYear('2021')">2021</button>
+                                <button type="button" class="btn btn-primary" onclick="selectYear('2022')">2022</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 기간별 조회 -->
+                <div id="periodSection" style="display:none;">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <label class="form-label">시작 연도:</label>
+                            <select class="form-select" id="startYear">
+                                <option value="2015">2015</option>
+                                <option value="2016">2016</option>
+                                <option value="2017">2017</option>
+                                <option value="2018">2018</option>
+                                <option value="2019">2019</option>
+                                <option value="2020" selected>2020</option>
+                                <option value="2021">2021</option>
+                                <option value="2022">2022</option>
+                                <option value="2023">2023</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">종료 연도:</label>
+                            <select class="form-select" id="endYear">
+                                <option value="2015">2015</option>
+                                <option value="2016">2016</option>
+                                <option value="2017">2017</option>
+                                <option value="2018">2018</option>
+                                <option value="2019">2019</option>
+                                <option value="2020">2020</option>
+                                <option value="2021">2021</option>
+                                <option value="2022" selected>2022</option>
+                                <option value="2023">2023</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <div>
+                                <button class="btn btn-success" onclick="applyPeriod()">
+                                    <i class="fas fa-chart-line"></i> 기간 분석 시작
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 필터 관련 함수들
+        function toggleViewMode() {
+            const viewMode = document.getElementById('viewMode').value;
+            currentViewMode = viewMode;
+            const singleSection = document.getElementById('singleYearSection');
+            const periodSection = document.getElementById('periodSection');
+            
+            if (viewMode === 'period') {
+                singleSection.style.display = 'none';
+                periodSection.style.display = 'block';
+            } else {
+                singleSection.style.display = 'block';
+                periodSection.style.display = 'none';
+            }
+        }
+        
+        function selectYear(year) {
+            // 버튼 스타일 업데이트
+            document.querySelectorAll('#singleYearSection .btn').forEach(btn => {
+                btn.className = 'btn btn-outline-primary';
+            });
+            event.target.className = 'btn btn-primary';
+            
+            // 데이터 로드
+            const reportCode = document.getElementById('reportType').value;
+            loadFinancialData(currentCorpCode, currentCorpName, 'single', year, '', '', reportCode);
+        }
+        
+        function applyFilters() {
+            const reportCode = document.getElementById('reportType').value;
+            if (currentViewMode === 'period') {
+                applyPeriod();
+            } else {
+                const selectedYear = document.querySelector('#singleYearSection .btn-primary')?.textContent || '2022';
+                loadFinancialData(currentCorpCode, currentCorpName, 'single', selectedYear, '', '', reportCode);
+            }
+        }
+        
+        function applyPeriod() {
+            const startYear = document.getElementById('startYear').value;
+            const endYear = document.getElementById('endYear').value;
+            const reportCode = document.getElementById('reportType').value;
+            
+            if (parseInt(startYear) > parseInt(endYear)) {
+                alert('시작 연도는 종료 연도보다 작거나 같아야 합니다.');
+                return;
+            }
+            
+            loadFinancialData(currentCorpCode, currentCorpName, 'period', '', startYear, endYear, reportCode);
+        }
+        
+        // 재무제표 데이터 로딩 (JSON API 사용)
+        function loadFinancialData(corpCode, corpName, viewMode, year, startYear, endYear, reportCode) {
+            const loadingDiv = document.getElementById('financialLoading');
+            const chartsSection = document.getElementById('chartsSection');
+            const dataTableSection = document.getElementById('dataTableSection');
+            const analysisSummary = document.getElementById('analysisSummary');
+            const periodInfo = document.getElementById('periodInfo');
+            
+            // 로딩 표시
+            loadingDiv.style.display = 'block';
+            chartsSection.innerHTML = '';
+            dataTableSection.innerHTML = '';
+            analysisSummary.innerHTML = '';
+            periodInfo.style.display = 'none';
+            
+            // JSON API 엔드포인트 사용
+            let url = '/financial-api?';
+            const params = new URLSearchParams({
+                corp_code: corpCode,
+                corp_name: corpName,
+                view_mode: viewMode,
+                report_code: reportCode
+            });
+            
+            if (viewMode === 'period') {
+                params.append('start_year', startYear);
+                params.append('end_year', endYear);
+            } else {
+                params.append('year', year);
+            }
+            
+            url += params.toString();
+            
+            // JSON 데이터 가져오기
+            console.log('🔍 API 호출:', url);
+            fetch(url)
+                .then(response => {
+                    console.log('📊 응답 상태:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📋 응답 데이터:', data);
+                    loadingDiv.style.display = 'none';
+                    if (data.success) {
+                        console.log('✅ 데이터 처리 시작');
+                        displayFinancialData(data, viewMode, year, startYear, endYear);
+                    } else {
+                        console.error('❌ API 오류:', data.error);
+                        showError(data.error || '데이터 조회 중 오류가 발생했습니다.');
+                    }
+                })
+                .catch(error => {
+                    loadingDiv.style.display = 'none';
+                    console.error('❌ 데이터 로딩 오류:', error);
+                    showError('데이터 로딩 중 오류가 발생했습니다.');
+                });
+        }
+        
+        function displayFinancialData(data, viewMode, year, startYear, endYear) {
+            const chartsSection = document.getElementById('chartsSection');
+            const dataTableSection = document.getElementById('dataTableSection');
+            const analysisSummary = document.getElementById('analysisSummary');
+            const periodInfo = document.getElementById('periodInfo');
+            
+            // 기간 정보 표시
+            if (viewMode === 'period') {
+                periodInfo.innerHTML = `
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-1">
+                                <i class="fas fa-calendar-alt me-2"></i>분석 기간: ${startYear}년 ~ ${endYear}년
+                            </h5>
+                            <p class="mb-0 text-muted">기간별 재무 성과 및 트렌드 분석</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <span class="badge bg-info fs-6">기간별 분석</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                periodInfo.innerHTML = `
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-1">
+                                <i class="fas fa-calendar me-2"></i>분석 연도: ${year}년
+                            </h5>
+                            <p class="mb-0 text-muted">당기와 전기 재무상태 비교 분석</p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <span class="badge bg-secondary fs-6">단일 연도</span>
+                        </div>
+                    </div>
+                `;
+            }
+            periodInfo.style.display = 'block';
+            
+            // 분석 요약 표시
+            if (data.analysis_summary) {
+                displayAnalysisSummary(data.analysis_summary);
+            }
+            
+            // 차트 표시 - JSON에서 받은 HTML 문자열을 직접 삽입
+            if (data.charts) {
+                displayCharts(data.charts, viewMode, data.financial_data);
+            }
+            
+            // 데이터 테이블 표시
+            if (data.financial_data) {
+                displayDataTable(data.financial_data);
+            }
+        }
+
+        function displayAnalysisSummary(summary) {
+            const analysisSummary = document.getElementById('analysisSummary');
+            if (!summary || !summary.key_metrics) return;
+            
+            let html = `
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card border-dark shadow">
+                            <div class="card-header bg-dark text-white">
+                                <h5 class="mb-0"><i class="fas fa-analytics me-2"></i>기간별 분석 요약</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h6 class="text-muted">분석 기간</h6>
+                                            <h4 class="text-primary">${summary.period}</h4>
+                                            <p class="small text-muted">
+                                                분석 연도: ${summary.years_analyzed ? summary.years_analyzed.join(', ') + '년' : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-9">
+                                        <div class="row">
+            `;
+            
+            for (const [account, metrics] of Object.entries(summary.key_metrics)) {
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="text-dark mb-2">
+                                <i class="fas fa-chart-bar me-1"></i>${account}
+                            </h6>
+                            <div class="small">
+                                <div class="d-flex justify-content-between">
+                                    <span>시작값:</span>
+                                    <strong>${metrics.start_value_formatted}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>종료값:</span>
+                                    <strong>${metrics.end_value_formatted}</strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>총 성장률:</span>
+                                    <strong class="${metrics.total_growth >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${metrics.total_growth.toFixed(1)}%
+                                    </strong>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>연평균 성장률:</span>
+                                    <strong class="${metrics.cagr >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${metrics.cagr.toFixed(1)}%
+                                    </strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            analysisSummary.innerHTML = html;
+        }
+        
+        function displayCharts(charts, viewMode, financialData) {
+            console.log('📊 차트 표시 시작:', charts);
+            const chartsSection = document.getElementById('chartsSection');
+            let html = '';
+            
+                         // 당기/전기 정보 추출
+             let periodInfo = '';
+             if (financialData && financialData.length > 0) {
+                 const firstItem = financialData[0];
+                 if (viewMode === 'single') {
+                     periodInfo = `
+                         <div class="chart-period-info">
+                             <div class="row text-center">
+                                 <div class="col-md-6">
+                                     <strong>당기 (현재):</strong> ${firstItem.thstrm_nm || '현재 기간'} 
+                                     <br><span class="text-muted">${firstItem.thstrm_dt || ''}</span>
+                                 </div>
+                                 <div class="col-md-6">
+                                     <strong>전기 (이전):</strong> ${firstItem.frmtrm_nm || '이전 기간'} 
+                                     <br><span class="text-muted">${firstItem.frmtrm_dt || ''}</span>
+                                 </div>
+                             </div>
+                         </div>
+                     `;
+                 }
+             }
+            
+            console.log('📈 차트 개수:', Object.keys(charts).length);
+            
+                         // 1. 재무제표 섹션
+             html += `<div class="mb-4"><h2 class="text-white fw-bold border-bottom pb-2" style="font-size: 2.2rem;">📊 재무제표</h2></div>`;
+             
+             // 재무상태표 (왼쪽 그래프, 오른쪽 요약표)
+             if (charts.balance_sheet) {
+                 console.log('📊 재무상태표 차트 추가');
+                 html += `
+                     <div class="mb-4">
+                         <div class="row">
+                             <div class="col-lg-8 col-md-12 mb-3">
+                                 <div class="chart-container">
+                                                             <div class="chart-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>재무상태표</h5>
+                        </div>
+                                     <div class="chart-body">
+                                         ${periodInfo}
+                                         ${charts.balance_sheet}
+                                     </div>
+                                 </div>
+                             </div>
+                             ${charts.balance_sheet_table ? `
+                             <div class="col-lg-4 col-md-12 mb-3">
+                                 <div class="chart-container">
+                                     <div class="chart-header">
+                                         <h5 class="mb-0"><i class="fas fa-table me-2"></i>요약표</h5>
+                                     </div>
+                                     <div class="chart-body">
+                                         ${charts.balance_sheet_table}
+                                     </div>
+                                 </div>
+                             </div>
+                             ` : ''}
+                         </div>
+                     </div>
+                 `;
+                 periodInfo = ''; // 첫 번째 차트에만 표시
+             }
+             
+             // 손익계산서 (왼쪽 그래프, 오른쪽 요약표)
+             if (charts.income_statement) {
+                 console.log('📊 손익계산서 차트 추가');
+                 html += `
+                     <div class="mb-4">
+                         <div class="row">
+                             <div class="col-lg-8 col-md-12 mb-3">
+                                 <div class="chart-container">
+                                                             <div class="chart-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>손익계산서</h5>
+                        </div>
+                                     <div class="chart-body">
+                                         ${charts.income_statement}
+                                     </div>
+                                 </div>
+                             </div>
+                             ${charts.income_statement_table ? `
+                             <div class="col-lg-4 col-md-12 mb-3">
+                                 <div class="chart-container">
+                                     <div class="chart-header">
+                                         <h5 class="mb-0"><i class="fas fa-table me-2"></i>요약표</h5>
+                                     </div>
+                                     <div class="chart-body">
+                                         ${charts.income_statement_table}
+                                     </div>
+                                 </div>
+                             </div>
+                             ` : ''}
+                         </div>
+                     </div>
+                 `;
+             }
+             
+             // 주요 재무비율 섹션
+             html += `<div class="mb-4"><h2 class="text-white fw-bold border-bottom pb-2" style="font-size: 2.2rem;">📈 주요 재무비율</h2></div>`;
+             
+             // 수익성 분석과 부채비율 분석을 한 줄에 배치
+             if (charts.profitability_radar || charts.debt_ratio_donut) {
+                 html += `<div class="row mb-4">`;
+                 
+                 // 수익성 분석 (방사형차트)
+                 if (charts.profitability_radar) {
+                     console.log('📊 수익성 분석 차트 추가');
+                     html += `
+                         <div class="col-lg-6 col-md-12 mb-3">
+                             <div class="chart-container">
+                                                         <div class="chart-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>수익성 분석</h5>
+                        </div>
+                                 <div class="chart-body">
+                                     ${charts.profitability_radar}
+                                 </div>
+                             </div>
+                         </div>
+                     `;
+                 }
+                 
+                 // 부채비율 분석 (도넛차트)
+                 if (charts.debt_ratio_donut) {
+                     console.log('📊 부채비율 분석 차트 추가');
+                     html += `
+                         <div class="col-lg-6 col-md-12 mb-3">
+                             <div class="chart-container">
+                                                         <div class="chart-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>부채비율 분석</h5>
+                        </div>
+                                 <div class="chart-body">
+                                     ${charts.debt_ratio_donut}
+                                 </div>
+                             </div>
+                         </div>
+                     `;
+                 }
+                 
+                 html += `</div>`;
+             }
+            
+                         // 나머지 요소들을 하위에 배치
+             const remainingCharts = {};
+             for (const [chartName, chartHtml] of Object.entries(charts)) {
+                 if (!['balance_sheet', 'balance_sheet_table', 'income_statement', 'income_statement_table', 
+                       'profitability_radar', 'debt_ratio_donut'].includes(chartName)) {
+                     remainingCharts[chartName] = chartHtml;
+                 }
+             }
+             
+             if (Object.keys(remainingCharts).length > 0) {
+                 html += `<div class="mt-4"><h3 class="text-muted border-bottom pb-2">📊 추가 분석 차트</h3></div>`;
+                
+                for (const [chartName, chartHtml] of Object.entries(remainingCharts)) {
+                    console.log(`📊 추가 차트 배치: ${chartName}, HTML 길이: ${chartHtml.length}`);
+                    html += `
+                        <div class="chart-container">
+                            ${chartHtml}
+                        </div>
+                    `;
+                }
+            }
+            
+            console.log('📋 최종 HTML 길이:', html.length);
+            chartsSection.innerHTML = html;
+            console.log('✅ 차트 HTML 삽입 완료');
+            
+            // Plotly 차트 다시 렌더링 - 스크립트 태그 실행
+            setTimeout(() => {
+                console.log('🔄 Plotly 렌더링 시작');
+                
+                // Plotly 로드 대기 후 스크립트 실행
+                function waitForPlotlyAndExecuteScripts() {
+                    if (typeof Plotly !== 'undefined') {
+                        console.log('✅ Plotly 로드 완료, 스크립트 실행 시작');
+                        
+                        // 삽입된 HTML 내의 script 태그들을 찾아서 실행
+                        const scripts = chartsSection.querySelectorAll('script');
+                        console.log(`📜 발견된 스크립트 개수: ${scripts.length}`);
+                        
+                        scripts.forEach((script, index) => {
+                            console.log(`🔄 스크립트 ${index + 1} 실행 중...`);
+                            try {
+                                // eval을 사용하여 스크립트 직접 실행
+                                eval(script.textContent);
+                                console.log(`✅ 스크립트 ${index + 1} 실행 완료`);
+                            } catch (error) {
+                                console.error(`❌ 스크립트 ${index + 1} 실행 오류:`, error);
+                            }
+                        });
+                        
+                        // Plotly autoResize
+                        console.log('✅ Plotly autoResize 호출');
+                        Plotly.autoResize();
+                    } else {
+                        console.log('⏳ Plotly 로드 대기 중...');
+                        setTimeout(waitForPlotlyAndExecuteScripts, 100);
+                    }
+                }
+                
+                // Plotly 로드 대기 시작
+                waitForPlotlyAndExecuteScripts();
+            }, 200);
+        }
+        
+        function displayDataTable(data) {
+            const dataTableSection = document.getElementById('dataTableSection');
+            
+            let html = `
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-table me-2"></i>상세 재무 데이터</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="data-table">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>계정명</th>
+                                        <th>구분</th>
+                                        <th>당기</th>
+                                        <th>전기</th>
+                                        <th>단위</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            `;
+            
+            data.slice(0, 30).forEach(item => {
+                html += `
+                    <tr>
+                        <td><strong>${item.account_nm}</strong></td>
+                        <td>
+                            ${item.sj_div === 'BS' ? 
+                                '<span class="badge bg-primary">재무상태표</span>' : 
+                                '<span class="badge bg-success">손익계산서</span>'
+                            }
+                        </td>
+                        <td>${item.thstrm_amount_formatted || item.thstrm_amount || '-'}</td>
+                        <td>${item.frmtrm_amount_formatted || item.frmtrm_amount || '-'}</td>
+                        <td><small class="text-muted">${item.currency || '원'}</small></td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            dataTableSection.innerHTML = html;
+        }
+        
+        function showError(message) {
+            const chartsSection = document.getElementById('chartsSection');
+            chartsSection.innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${message}
+                </div>
+            `;
+        }
+        
+        // Plotly 로드 상태 확인
+        function checkPlotlyLoaded() {
+            if (typeof Plotly !== 'undefined') {
+                console.log('✅ Plotly 라이브러리 로드 완료');
+                return true;
+            } else {
+                console.log('⏳ Plotly 라이브러리 로드 대기 중...');
+                return false;
+            }
+        }
+        
+        // 페이지 로드 시 URL 파라미터 확인
+        window.addEventListener('load', function() {
+            // Plotly 로드 확인
+            if (!checkPlotlyLoaded()) {
+                console.log('⚠️ Plotly가 로드되지 않았습니다. 차트 렌더링에 문제가 있을 수 있습니다.');
+            }
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const corpCode = urlParams.get('corp_code');
+            const corpName = urlParams.get('corp_name');
+            
+            if (corpCode && corpName) {
+                document.getElementById('companySearch').value = corpName;
+                selectCompany(corpCode, corpName);
+            }
+        });
+    </script>
+</body>
+</html>
